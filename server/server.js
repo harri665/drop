@@ -13,7 +13,16 @@ const PORT = 3001; // Port the server will listen on
 
 // --- CORS Configuration ---
 // This allows requests from any origin. For production, you should restrict this to your client's domain.
-app.use(cors());
+// CORS Configuration - restrict to specific client origin and allow credentials
+const corsOptions = {
+  origin: 'https://drop.harrison-martin.com',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
+app.use(cors(corsOptions));
+// Enable preflight for all routes
+app.options('*', cors(corsOptions));
 
 // --- Body Parsers ---
 // Parse JSON bodies (for login requests)
