@@ -14,7 +14,7 @@ services:
   backend:
     image: harri665/drop-backend:latest
     ports:
-      - "3007:3007"
+      - "3007:3001"
     environment:
       - NODE_ENV=production
     restart: always
