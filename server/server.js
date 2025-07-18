@@ -72,7 +72,7 @@ const imageLoginAttempts = {};
 
 // A very basic "session" management. In a real app, use JWTs or proper session middleware.
 const authenticatedUsers = new Set(); // Stores user IDs (or simple tokens) of authenticated clients
-
+//test
 // --- Admin Password System ---
 // Use bcrypt for hashing and comparison
 const bcrypt = require('bcrypt');
