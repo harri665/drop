@@ -14,14 +14,39 @@ const PORT = 3001; // Port the server will listen on
 // --- CORS Configuration ---
 // Configure CORS to allow requests from your deployed client
 const corsOptions = {
-  origin: ['https://drop.harrison-martin.com', 'http://localhost:3000'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'https://drop.harrison-martin.com',
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
+
 app.use(cors(corsOptions));
-// Handle preflight requests for all routes
-app.options('*', cors(corsOptions));
+
+// Explicit preflight handling
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).send();
+});
 
 // --- Body Parsers ---
 // Parse JSON bodies (for login requests)
@@ -119,6 +144,11 @@ function authenticateToken(req, res, next) {
 }
 
 // --- Endpoints ---
+
+// Simple test endpoint to verify CORS is working
+app.get('/test', (req, res) => {
+    res.json({ message: 'CORS is working!', origin: req.headers.origin });
+});
 
 /**
  * @api {post} /login User Login
