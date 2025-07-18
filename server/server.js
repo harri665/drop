@@ -20,9 +20,10 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 };
-app.use(cors(corsOptions));
+// app.use(cors(corsOptions));
+app.use(cors());
 // Enable preflight for all routes
-app.options('*', cors(corsOptions));
+// app.options('*', cors(corsOptions));
 
 // --- Body Parsers ---
 // Parse JSON bodies (for login requests)
