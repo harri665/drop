@@ -20,13 +20,13 @@ jobs:
         echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
     
     - name: Build the server Docker image
-      run: docker build ./server --file server/Dockerfile --tag harri665/portfolio-backend:latest
+      run: docker build ./server --file server/Dockerfile --tag harri665/drop-backend:latest
     
     - name: Push the server Docker image to Docker Hub
-      run: docker push harri665/portfolio-backend:latest
+      run: docker push harri665/drop-backend:latest
     
     - name: Build the client Docker image
-      run: docker build ./client --file client/Dockerfile --tag harri665/portfolio-frontend:latest
+      run: docker build ./client --file client/Dockerfile --tag harri665/drop-frontend:latest
     
     - name: Push the client Docker image to Docker Hub
-      run: docker push harri665/portfolio-frontend:latest
+      run: docker push harri665/drop-frontend:latest
