@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: harri665/portfolio-frontend:latest
+    ports:
+      - "3004:80" # Serve the frontend on port 80
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: always
+
+  backend:
+    image: harri665/portfolio-backend:latest
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=production
+    restart: always
