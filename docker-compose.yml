@@ -2,9 +2,9 @@ version: '3.8'
 
 services:
   frontend:
-    image: harri665/portfolio-frontend:latest
+    image: harri665/drop-frontend:latest
     ports:
-      - "3004:80" # Serve the frontend on port 80
+      - "3006:80" # Serve the frontend on port 80
     environment:
       - NODE_ENV=production
     depends_on:
@@ -12,9 +12,9 @@ services:
     restart: always
 
   backend:
-    image: harri665/portfolio-backend:latest
+    image: harri665/drop-backend:latest
     ports:
-      - "3005:3005"
+      - "3007:3007"
     environment:
       - NODE_ENV=production
     restart: always
