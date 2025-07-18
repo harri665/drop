@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
 
 // The server URL should point to your running Node.js backend
-const SERVER_URL = 'http://localhost:3001';
+const SERVER_URL = process.env.NODE_ENV === 'production'
+  ? 'https://dropapi.harrison-martin.com'
+  : 'http://localhost:3001';
 
 // --- Reusable Components ---
 
