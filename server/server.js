@@ -12,9 +12,16 @@ const app = express();
 const PORT = 3001; // Port the server will listen on
 
 // --- CORS Configuration ---
-// This now explicitly uses the permissive CORS policy (allowing all origins),
-// matching the setup in your second file.
-app.use(cors());
+// Configure CORS to allow requests from your deployed client
+const corsOptions = {
+  origin: ['https://drop.harrison-martin.com', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
+app.use(cors(corsOptions));
+// Handle preflight requests for all routes
+app.options('*', cors(corsOptions));
 
 // --- Body Parsers ---
 // Parse JSON bodies (for login requests)
