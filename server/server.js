@@ -257,11 +257,9 @@ app.get('/files', authenticateToken, (req, res) => {
 // --- Notes Endpoints (JSON file DB) ---
 app.get('/notes', authenticateToken, (req, res) => {
     const allNotes = readData(NOTES_FILE);
-    // Return all notes across all users
-    // Note: This endpoint currently returns all notes for all users.
-    // If notes should be user-specific, filter by req.user.id here.
-    const notes = Object.values(allNotes).flat();
-    res.json({ notes });
+    // Return user-specific notes
+    const userNotes = allNotes[req.user.id] || [];
+    res.json({ notes: userNotes });
 });
 
 app.post('/notes', authenticateToken, (req, res) => {

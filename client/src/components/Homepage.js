@@ -69,28 +69,132 @@ function FullscreenNoteEditor({ note, onSave, onClose }) {
 
 // --- Dashboard Section Components ---
 
-function NotesSection() {
-    const [notes, setNotes] = useState(() => {
-        const savedNotes = localStorage.getItem('dashboard_notes_list');
-        return savedNotes ? JSON.parse(savedNotes) : [{ id: Date.now(), content: '' }];
-    });
+function NotesSection({ token, showMessage }) {
+    const [notes, setNotes] = useState([]);
     const [fullscreenNote, setFullscreenNote] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
 
+    // Fetch notes from server on mount and when token changes
     useEffect(() => {
-        localStorage.setItem('dashboard_notes_list', JSON.stringify(notes));
-    }, [notes]);
+        const fetchNotes = async () => {
+            if (!token) {
+                setNotes([]); // Clear notes when no token
+                return;
+            }
+            setIsLoading(true);
+            try {
+                const response = await fetch(`${SERVER_URL}/notes`, {
+                    headers: { 'Authorization': token }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    setNotes(data.notes || []);
+                } else {
+                    showMessage(`Error fetching notes: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error fetching notes: ${error.message}`, 'error');
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-    const handleNoteChange = (id, content) => {
+        fetchNotes();
+    }, [token, showMessage]);
+
+    const handleNoteChange = async (id, content) => {
+        if (!token) return;
+        
+        // Store original content for potential revert
+        const originalNote = notes.find(note => note.id === id);
+        const originalContent = originalNote ? originalNote.content : '';
+        
+        // Update local state immediately for better UX
         setNotes(notes.map(note => note.id === id ? { ...note, content } : note));
+        
+        try {
+            const response = await fetch(`${SERVER_URL}/notes/${id}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': token 
+                },
+                body: JSON.stringify({ content })
+            });
+            
+            if (!response.ok) {
+                const data = await response.json();
+                showMessage(`Error updating note: ${data.message}`, 'error');
+                // Revert local state on error
+                setNotes(notes.map(note => note.id === id ? { ...note, content: originalContent } : note));
+            }
+        } catch (error) {
+            showMessage(`Error updating note: ${error.message}`, 'error');
+            // Revert local state on error
+            setNotes(notes.map(note => note.id === id ? { ...note, content: originalContent } : note));
+        }
     };
 
-    const addNote = () => {
-        setNotes([...notes, { id: Date.now(), content: '' }]);
+    const addNote = async () => {
+        if (!token) return;
+        
+        try {
+            const response = await fetch(`${SERVER_URL}/notes`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': token 
+                },
+                body: JSON.stringify({ content: '' })
+            });
+            
+            const data = await response.json();
+            if (response.ok) {
+                setNotes([...notes, data.note]);
+                showMessage('Note created successfully', 'success');
+            } else {
+                showMessage(`Error creating note: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            showMessage(`Error creating note: ${error.message}`, 'error');
+        }
     };
 
-    const deleteNote = (id) => {
+    const deleteNote = async (id) => {
+        if (!token) return;
+        
+        // Update local state immediately for better UX
+        const originalNotes = notes;
         setNotes(notes.filter(note => note.id !== id));
+        
+        try {
+            const response = await fetch(`${SERVER_URL}/notes/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': token }
+            });
+            
+            if (!response.ok) {
+                const data = await response.json();
+                showMessage(`Error deleting note: ${data.message}`, 'error');
+                // Revert local state on error
+                setNotes(originalNotes);
+            } else {
+                showMessage('Note deleted successfully', 'success');
+            }
+        } catch (error) {
+            showMessage(`Error deleting note: ${error.message}`, 'error');
+            // Revert local state on error
+            setNotes(originalNotes);
+        }
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex flex-col h-full justify-center items-center">
+                <div className="text-gray-400">Loading notes...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-full">
@@ -590,7 +694,7 @@ function HomePage() {
       {token && (
         <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[calc(100vh-12rem)]">
           <DashboardColumn title="Notes">
-            <NotesSection />
+            <NotesSection token={token} showMessage={showMessage} />
           </DashboardColumn>
           <DashboardColumn title="Files">
             <FileColumn ref={filesColumnRef} title="Files" sectionId="files" token={token} showMessage={showMessage} fileTypeFilter="other" />
