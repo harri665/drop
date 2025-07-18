@@ -7,23 +7,14 @@ const multer = require('multer');   // Middleware for handling multipart/form-da
 const path = require('path');     // Utility for working with file and directory paths
 const fs = require('fs');         // File system module for reading/writing files
 const cors = require('cors');     // Middleware to enable Cross-Origin Resource Sharing
-//hello
+
 const app = express();
 const PORT = 3001; // Port the server will listen on
 
 // --- CORS Configuration ---
-// This allows requests from any origin. For production, you should restrict this to your client's domain.
-// CORS Configuration - restrict to specific client origin and allow credentials
-const corsOptions = {
-  origin: 'https://drop.harrison-martin.com',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-};
-// app.use(cors(corsOptions));
+// This now explicitly uses the permissive CORS policy (allowing all origins),
+// matching the setup in your second file.
 app.use(cors());
-// Enable preflight for all routes
-// app.options('*', cors(corsOptions));
 
 // --- Body Parsers ---
 // Parse JSON bodies (for login requests)
@@ -61,11 +52,14 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 const NOTES_FILE = path.join(DATA_DIR, 'notes.json');
 const PASSWORDS_FILE = path.join(DATA_DIR, 'passwords.json');
 function readData(file) {
-  if (!fs.existsSync(file)) return {};
-  try { return JSON.parse(fs.readFileSync(file)); } catch { return {}; }
+    if (!fs.existsSync(file)) return {};
+    try { return JSON.parse(fs.readFileSync(file)); } catch (e) {
+        console.error(`Error reading data from ${file}:`, e);
+        return {};
+    }
 }
 function writeData(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
 // --- Image-Based Password System ---
@@ -82,13 +76,16 @@ const imageLoginAttempts = {};
 
 // A very basic "session" management. In a real app, use JWTs or proper session middleware.
 const authenticatedUsers = new Set(); // Stores user IDs (or simple tokens) of authenticated clients
-//test
+
 // --- Admin Password System ---
 // Use bcrypt for hashing and comparison
 const bcrypt = require('bcrypt');
 // Default admin password (override via env vars)
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 // Hashed admin password (or provide via env)
+// Note: If ADMIN_PASSWORD_HASH is not set via env, it will be re-hashed on every server restart
+// which means the 'admin' password will only work if the server hasn't restarted since the hash was generated.
+// For production, always set ADMIN_PASSWORD_HASH as an environment variable with a pre-computed hash.
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || bcrypt.hashSync(ADMIN_PASSWORD, 10);
 // Max attempts for admin password
 const MAX_ADMIN_PASSWORD_ATTEMPTS = parseInt(process.env.MAX_ADMIN_PASSWORD_ATTEMPTS) || 5;
@@ -141,7 +138,7 @@ app.post('/login', (req, res) => {
 
     // Compare the received sequence with the correct sequence
     const isCorrect = imageSequence.length === CORRECT_IMAGE_SEQUENCE.length &&
-                      imageSequence.every((value, index) => value === CORRECT_IMAGE_SEQUENCE[index]);
+                     imageSequence.every((value, index) => value === CORRECT_IMAGE_SEQUENCE[index]);
 
     if (isCorrect) {
         // reset attempts on success
@@ -152,6 +149,7 @@ app.post('/login', (req, res) => {
         console.log(`User logged in. Token: ${token}`);
         res.json({ message: 'Login successful!', token });
     } else {
+        imageLoginAttempts[clientKey]++; // Increment attempts on failure
         res.status(401).json({ message: 'Incorrect image sequence.' });
     }
 });
@@ -230,65 +228,71 @@ app.get('/files', authenticateToken, (req, res) => {
 
 // --- Notes Endpoints (JSON file DB) ---
 app.get('/notes', authenticateToken, (req, res) => {
-  const allNotes = readData(NOTES_FILE);
-  // Return all notes across all users
-  const notes = Object.values(allNotes).flat();
-  res.json({ notes });
+    const allNotes = readData(NOTES_FILE);
+    // Return all notes across all users
+    // Note: This endpoint currently returns all notes for all users.
+    // If notes should be user-specific, filter by req.user.id here.
+    const notes = Object.values(allNotes).flat();
+    res.json({ notes });
 });
 
 app.post('/notes', authenticateToken, (req, res) => {
-  const { content } = req.body;
-  if (typeof content !== 'string') {
-    return res.status(400).json({ message: 'Content is required.' });
-  }
-  const allNotes = readData(NOTES_FILE);
-  const entry = { id: Date.now().toString(), content };
-  if (!allNotes[req.user.id]) allNotes[req.user.id] = [];
-  allNotes[req.user.id].push(entry);
-  writeData(NOTES_FILE, allNotes);
-  res.json({ note: entry });
+    const { content } = req.body;
+    if (typeof content !== 'string') {
+        return res.status(400).json({ message: 'Content is required and must be a string.' });
+    }
+    const allNotes = readData(NOTES_FILE);
+    const entry = { id: Date.now().toString(), content };
+    if (!allNotes[req.user.id]) allNotes[req.user.id] = [];
+    allNotes[req.user.id].push(entry);
+    writeData(NOTES_FILE, allNotes);
+    res.json({ note: entry });
 });
 
 app.put('/notes/:id', authenticateToken, (req, res) => {
-  const { content } = req.body;
-  const allNotes = readData(NOTES_FILE);
-  const list = allNotes[req.user.id] || [];
-  const note = list.find(n => n.id === req.params.id);
-  if (!note) return res.status(404).json({ message: 'Note not found.' });
-  note.content = content;
-  writeData(NOTES_FILE, allNotes);
-  res.json({ note });
+    const { content } = req.body;
+    if (typeof content !== 'string') {
+        return res.status(400).json({ message: 'Content is required and must be a string.' });
+    }
+    const allNotes = readData(NOTES_FILE);
+    const list = allNotes[req.user.id] || [];
+    const note = list.find(n => n.id === req.params.id);
+    if (!note) return res.status(404).json({ message: 'Note not found.' });
+    note.content = content;
+    writeData(NOTES_FILE, allNotes);
+    res.json({ note });
 });
 
 app.delete('/notes/:id', authenticateToken, (req, res) => {
-  const allNotes = readData(NOTES_FILE);
-  let list = allNotes[req.user.id] || [];
-  const idx = list.findIndex(n => n.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Note not found.' });
-  list.splice(idx, 1);
-  allNotes[req.user.id] = list;
-  writeData(NOTES_FILE, allNotes);
-  res.json({ message: 'Note deleted.' });
+    const allNotes = readData(NOTES_FILE);
+    let list = allNotes[req.user.id] || [];
+    const idx = list.findIndex(n => n.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ message: 'Note not found.' });
+    list.splice(idx, 1);
+    allNotes[req.user.id] = list;
+    writeData(NOTES_FILE, allNotes);
+    res.json({ message: 'Note deleted.' });
 });
 
 // --- Passwords Endpoints (JSON file DB) ---
 app.get('/passwords', authenticateToken, (req, res) => {
-  const allPass = readData(PASSWORDS_FILE);
-  const passwords = allPass[req.user.id] || [];
-  res.json({ passwords });
+    const allPass = readData(PASSWORDS_FILE);
+    const passwords = allPass[req.user.id] || [];
+    res.json({ passwords });
 });
 
 // --- Image Preview Endpoint ---
 // Serve images directly for previewing in browser
 app.get('/images/:filename', authenticateToken, (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(UPLOAD_DIR, filename);
-  fs.access(filePath, fs.constants.F_OK, (err) => {
-    if (err) return res.status(404).json({ message: 'Image not found.' });
-    res.sendFile(filePath, (err) => {
-      if (err) res.status(500).json({ message: 'Error sending image.' });
+    const filename = req.params.filename;
+    const filePath = path.join(UPLOAD_DIR, filename);
+    fs.access(filePath, fs.constants.F_OK, (err) => {
+        if (err) return res.status(404).json({ message: 'Image not found.' });
+        res.sendFile(filePath, (err) => {
+            if (err) res.status(500).json({ message: 'Error sending image.' });
+        });
     });
-  });
+});
 
 // --- Admin Password Verification Endpoint ---
 /**
@@ -301,57 +305,56 @@ app.get('/images/:filename', authenticateToken, (req, res) => {
  * @apiError {String} message Error message if verification fails.
  */
 app.post('/admin/check-password', authenticateToken, async (req, res) => {
-  const clientKey = req.user.id;
-  // Initialize attempt count
-  if (!adminPasswordAttempts[clientKey]) adminPasswordAttempts[clientKey] = 0;
-  // Too many attempts
-  if (adminPasswordAttempts[clientKey] >= MAX_ADMIN_PASSWORD_ATTEMPTS) {
-    return res.status(429).json({ message: 'Too many admin password attempts. Please try again later.' });
-  }
-  const { password } = req.body;
-  if (!password) {
-    return res.status(400).json({ message: 'Password is required.' });
-  }
-  try {
-    const match = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-    if (match) {
-      // reset attempts on success
-      adminPasswordAttempts[clientKey] = 0;
-      return res.json({ success: true });
-    } else {
-      // increment failure count
-      adminPasswordAttempts[clientKey]++;
-      return res.status(403).json({ message: 'Incorrect admin password.' });
+    const clientKey = req.user.id;
+    // Initialize attempt count
+    if (!adminPasswordAttempts[clientKey]) adminPasswordAttempts[clientKey] = 0;
+    // Too many attempts
+    if (adminPasswordAttempts[clientKey] >= MAX_ADMIN_PASSWORD_ATTEMPTS) {
+        return res.status(429).json({ message: 'Too many admin password attempts. Please try again later.' });
     }
-  } catch (err) {
-    console.error('Admin password check error:', err);
-    res.status(500).json({ message: 'Error verifying password.' });
-  }
-});
+    const { password } = req.body;
+    if (!password) {
+        return res.status(400).json({ message: 'Password is required.' });
+    }
+    try {
+        const match = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+        if (match) {
+            // reset attempts on success
+            adminPasswordAttempts[clientKey] = 0;
+            return res.json({ success: true });
+        } else {
+            // increment failure count
+            adminPasswordAttempts[clientKey]++;
+            return res.status(403).json({ message: 'Incorrect admin password.' });
+        }
+    } catch (err) {
+        console.error('Admin password check error:', err);
+        res.status(500).json({ message: 'Error verifying password.' });
+    }
 });
 
 app.post('/passwords', authenticateToken, (req, res) => {
-  const { name, link, username, password } = req.body;
-  if (!name || !username || !password) {
-    return res.status(400).json({ message: 'Missing required fields.' });
-  }
-  const allPass = readData(PASSWORDS_FILE);
-  const entry = { id: Date.now().toString(), name, link: link || '', username, password };
-  if (!allPass[req.user.id]) allPass[req.user.id] = [];
-  allPass[req.user.id].push(entry);
-  writeData(PASSWORDS_FILE, allPass);
-  res.json({ password: entry });
+    const { name, link, username, password } = req.body;
+    if (!name || !username || !password) {
+        return res.status(400).json({ message: 'Missing required fields.' });
+    }
+    const allPass = readData(PASSWORDS_FILE);
+    const entry = { id: Date.now().toString(), name, link: link || '', username, password };
+    if (!allPass[req.user.id]) allPass[req.user.id] = [];
+    allPass[req.user.id].push(entry);
+    writeData(PASSWORDS_FILE, allPass);
+    res.json({ password: entry });
 });
 
 app.delete('/passwords/:id', authenticateToken, (req, res) => {
-  const allPass = readData(PASSWORDS_FILE);
-  let list = allPass[req.user.id] || [];
-  const idx = list.findIndex(e => e.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ message: 'Password not found.' });
-  list.splice(idx, 1);
-  allPass[req.user.id] = list;
-  writeData(PASSWORDS_FILE, allPass);
-  res.json({ message: 'Password deleted.' });
+    const allPass = readData(PASSWORDS_FILE);
+    let list = allPass[req.user.id] || [];
+    const idx = list.findIndex(e => e.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ message: 'Password not found.' });
+    list.splice(idx, 1);
+    allPass[req.user.id] = list;
+    writeData(PASSWORDS_FILE, allPass);
+    res.json({ message: 'Password deleted.' });
 });
 // --- End of Passwords Endpoints ---
 
@@ -360,5 +363,4 @@ app.listen(PORT, () => {
     console.log(`Down Drop Server running on http://localhost:${PORT}`);
     console.log(`Uploads directory: ${UPLOAD_DIR}`);
     console.log(`Remember the image sequence for login: ${CORRECT_IMAGE_SEQUENCE.join(', ')}`);
-
 });
